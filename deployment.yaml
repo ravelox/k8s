@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-server
+  namespace: ravelox-web
+spec:
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+      - name: myweb
+        image: ravelox/k8s-test:1
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
