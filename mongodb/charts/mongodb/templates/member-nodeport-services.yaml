@@ -1,0 +1,31 @@
+{{- if .Values.exposure.perMemberNodePort.enabled }}
+{{- $fullname := include "mongodb.fullname" . -}}
+{{- $labels := .Values.exposure.perMemberNodePort.labels | default dict -}}
+{{- $annotations := .Values.exposure.perMemberNodePort.annotations | default dict -}}
+{{- $basePort := int .Values.exposure.perMemberNodePort.baseNodePort -}}
+{{- range $index, $_ := until (int $.Values.replicaCount) }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-%d-node" $fullname $index }}
+  labels:
+    {{- include "mongodb.labels" $ | nindent 4 }}
+    {{- if $labels }}
+    {{- toYaml $labels | nindent 4 }}
+    {{- end }}
+  {{- if $annotations }}
+  annotations:
+    {{- toYaml $annotations | nindent 4 }}
+  {{- end }}
+spec:
+  type: NodePort
+  selector:
+    statefulset.kubernetes.io/pod-name: {{ printf "%s-%d" $fullname $index }}
+  ports:
+    - name: mongodb
+      port: {{ $.Values.service.port }}
+      targetPort: mongodb
+      nodePort: {{ add $basePort $index }}
+---
+{{- end }}
+{{- end }}

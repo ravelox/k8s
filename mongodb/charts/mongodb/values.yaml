@@ -1,0 +1,95 @@
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: mongo
+  tag: "7.0"
+  pullPolicy: IfNotPresent
+
+initContainers:
+  keyfile:
+    image: busybox
+    tag: "1.36.1"
+    pullPolicy: IfNotPresent
+
+replicaCount: 3
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+auth:
+  enabled: true
+  username: root
+  password: changeme
+  replicaSetKey: "supersecretkey"
+  replicaSetName: ""
+  existingSecret: ""
+
+service:
+  type: LoadBalancer
+  port: 27017
+  annotations: {}
+  labels: {}
+  loadBalancerIP: ""
+  loadBalancerSourceRanges: []
+  nodePort: null
+
+exposure:
+  perMemberNodePort:
+    enabled: false
+    externalIP: ""
+    baseNodePort: 32017
+    annotations: {}
+    labels: {}
+
+persistence:
+  enabled: true
+  storageClass: ""
+  accessModes:
+  - ReadWriteOnce
+  size: 10Gi
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+podSecurityContext:
+  fsGroup: 999
+
+securityContext:
+  runAsUser: 999
+  runAsNonRoot: true
+  runAsGroup: 999
+
+extraEnv: []
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 60
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 6
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+metrics:
+  enabled: false

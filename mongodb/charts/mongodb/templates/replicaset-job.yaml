@@ -1,0 +1,112 @@
+{{- $fullname := include "mongodb.fullname" . -}}
+{{- $replicaCount := int .Values.replicaCount -}}
+{{- $replicaSet := include "mongodb.replicaSetName" . -}}
+{{- $perNode := .Values.exposure.perMemberNodePort -}}
+{{- $useNodePorts := and $perNode.enabled (ne (default "" $perNode.externalIP) "") -}}
+{{- $externalIP := default "" $perNode.externalIP -}}
+{{- $baseNodePort := ternary (int $perNode.baseNodePort) 0 $useNodePorts -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $fullname }}-rs-init
+  labels:
+    {{- include "mongodb.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        {{- include "mongodb.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ include "mongodb.serviceAccountName" . }}
+      containers:
+        - name: replicaset-init
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            {{- if .Values.auth.enabled }}
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ if .Values.auth.existingSecret }}{{ .Values.auth.existingSecret }}{{ else }}{{ include "mongodb.fullname" . }}-auth{{ end }}
+                  key: username
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ if .Values.auth.existingSecret }}{{ .Values.auth.existingSecret }}{{ else }}{{ include "mongodb.fullname" . }}-auth{{ end }}
+                  key: password
+            {{- end }}
+          command:
+            - /bin/bash
+            - -c
+            - |-
+              set -euo pipefail
+              AUTH_ARGS=()
+              {{- if .Values.auth.enabled }}
+              AUTH_ARGS=(-u "${MONGO_INITDB_ROOT_USERNAME}" -p "${MONGO_INITDB_ROOT_PASSWORD}")
+              {{- end }}
+
+              SCRIPT="/tmp/rs-init.js"
+              cat <<'RS' > "${SCRIPT}"
+              const hosts = [
+              {{- $last := sub $replicaCount 1 -}}
+              {{- range $i, $_ := until $replicaCount }}
+                "{{- if $useNodePorts -}}{{ $externalIP }}:{{ add $baseNodePort $i }}{{- else -}}{{ printf "%s-%d.%s-headless:27017" $fullname $i $fullname }}{{- end -}}"{{- if ne $i $last }},{{ end }}
+              {{- end }}
+              ];
+              const config = {
+                _id: "{{ $replicaSet }}",
+                members: hosts.map((host, index) => ({ _id: index, host }))
+              };
+              try {
+                const status = rs.status();
+                if (status.ok === 1) {
+                  print('Replica set already initialized');
+                  quit(0);
+                }
+              } catch (err) {
+                if (err.codeName && err.codeName !== 'NotYetInitialized') {
+                  throw err;
+                }
+              }
+              const result = rs.initiate(config);
+              if (!result.ok || result.ok !== 1) {
+                throw new Error('Replica set initiation failed: ' + tojson(result));
+              }
+              print('Replica set initiated');
+              RS
+
+              HOSTS=()
+              if [ "{{ ternary "true" "false" $useNodePorts }}" = "true" ]; then
+                BASE_NODE_PORT={{ $baseNodePort }}
+                EXTERNAL_IP="{{ $externalIP }}"
+                for ordinal in $(seq 0 $(({{ $replicaCount }} - 1))); do
+                  HOSTS+=("${EXTERNAL_IP}:$((BASE_NODE_PORT + ordinal))")
+                done
+              else
+                for ordinal in $(seq 0 $(({{ $replicaCount }} - 1))); do
+                  HOSTS+=("{{ $fullname }}-${ordinal}.{{ $fullname }}-headless:27017")
+                done
+              fi
+
+              for host in "${HOSTS[@]}"; do
+                until mongosh "mongodb://${host}/admin" "${AUTH_ARGS[@]}" --quiet --eval 'db.runCommand({ ping: 1 })' >/dev/null 2>&1; do
+                  echo "Waiting for ${host} to accept connections..."
+                  sleep 5
+                done
+              done
+
+              mongosh "mongodb://{{ if $useNodePorts }}{{ $externalIP }}:{{ $baseNodePort }}{{ else }}{{ $fullname }}-0.{{ $fullname }}-headless:27017{{ end }}/admin" "${AUTH_ARGS[@]}" --quiet "${SCRIPT}"
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
