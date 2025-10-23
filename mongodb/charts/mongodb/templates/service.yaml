@@ -4,9 +4,19 @@ metadata:
   name: {{ include "mongodb.fullname" . }}
   labels:
     {{- include "mongodb.labels" . | nindent 4 }}
+  {{- $anno := dict -}}
   {{- with .Values.service.annotations }}
+    {{- range $k, $v := . }}
+      {{- $_ := set $anno $k $v -}}
+    {{- end }}
+  {{- end }}
+  {{- $issuerName := default "" .Values.tls.certManager.issuerRef.name -}}
+  {{- if $issuerName }}
+    {{- $_ := set $anno "cert-manager.io/cluster-issuer" $issuerName -}}
+  {{- end }}
+  {{- if gt (len $anno) 0 }}
   annotations:
-    {{- toYaml . | nindent 4 }}
+    {{- toYaml $anno | nindent 4 }}
   {{- end }}
 spec:
   type: {{ .Values.service.type }}
@@ -33,6 +43,15 @@ metadata:
   name: {{ include "mongodb.fullname" . }}-headless
   labels:
     {{- include "mongodb.labels" . | nindent 4 }}
+  {{- $headlessAnno := dict -}}
+  {{- $issuerName := default "" .Values.tls.certManager.issuerRef.name -}}
+  {{- if $issuerName }}
+    {{- $_ := set $headlessAnno "cert-manager.io/cluster-issuer" $issuerName -}}
+  {{- end }}
+  {{- if gt (len $headlessAnno) 0 }}
+  annotations:
+    {{- toYaml $headlessAnno | nindent 4 }}
+  {{- end }}
 spec:
   clusterIP: None
   publishNotReadyAddresses: true

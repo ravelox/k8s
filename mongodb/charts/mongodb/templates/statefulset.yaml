@@ -35,8 +35,9 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- if .Values.auth.enabled }}
+      {{- if or .Values.auth.enabled .Values.tls.enabled }}
       initContainers:
+        {{- if .Values.auth.enabled }}
         - name: mongodb-keyfile-setup
           image: "{{ .Values.initContainers.keyfile.image }}:{{ .Values.initContainers.keyfile.tag }}"
           imagePullPolicy: {{ .Values.initContainers.keyfile.pullPolicy }}
@@ -56,6 +57,55 @@ spec:
               readOnly: true
             - name: replicaset-key
               mountPath: /keyfile-dst
+        {{- end }}
+        {{- if .Values.tls.enabled }}
+        - name: mongodb-tls-setup
+          image: "{{ .Values.initContainers.keyfile.image }}:{{ .Values.initContainers.keyfile.tag }}"
+          imagePullPolicy: {{ .Values.initContainers.keyfile.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |-
+              set -euo pipefail
+              mkdir -p /tls-dst
+              wait_for_file() {
+                local path="$1"
+                local attempts=0
+                local max_attempts=${TLS_WAIT_ATTEMPTS:-60}
+                local sleep_seconds=${TLS_WAIT_SLEEP:-5}
+                until [ -f "${path}" ]; do
+                  attempts=$((attempts + 1))
+                  if [ "${attempts}" -ge "${max_attempts}" ]; then
+                    echo "timed out waiting for ${path}" >&2
+                    exit 1
+                  fi
+                  echo "Waiting for ${path} to appear..."
+                  sleep "${sleep_seconds}"
+                done
+              }
+              wait_for_file /tls-src/tls.crt
+              wait_for_file /tls-src/tls.key
+              CA_SOURCE=/tls-src/ca.crt
+              if [ ! -f "${CA_SOURCE}" ]; then
+                echo "ca.crt not found in TLS secret; falling back to tls.crt"
+                CA_SOURCE=/tls-src/tls.crt
+              else
+                echo "Using ca.crt from TLS secret"
+              fi
+              cat /tls-src/tls.key /tls-src/tls.crt > /tls-dst/tls.pem
+              cp "${CA_SOURCE}" /tls-dst/ca.crt
+              chown {{ $runAsUser }}:{{ $runAsGroup }} /tls-dst/tls.pem
+              chmod 400 /tls-dst/tls.pem
+              chown {{ $runAsUser }}:{{ $runAsGroup }} /tls-dst/ca.crt
+              chmod 444 /tls-dst/ca.crt
+          volumeMounts:
+            - name: tls-src
+              mountPath: /tls-src
+              readOnly: true
+            - name: tls
+              mountPath: /tls-dst
+        {{- end }}
       {{- end }}
       containers:
         - name: mongodb
@@ -67,6 +117,14 @@ spec:
             {{- if .Values.auth.enabled }}
             - --auth
             - --keyFile=/etc/mongodb/replicaset/keyfile
+            {{- end }}
+            {{- if .Values.tls.enabled }}
+            - --tlsMode={{ .Values.tls.mode }}
+            - --tlsCertificateKeyFile=/etc/mongodb/tls/tls.pem
+            - --tlsCAFile=/etc/mongodb/tls/ca.crt
+            {{- if .Values.tls.allowConnectionsWithoutCertificates }}
+            - --tlsAllowConnectionsWithoutCertificates
+            {{- end }}
             {{- end }}
           ports:
             - name: mongodb
@@ -92,6 +150,11 @@ spec:
               mountPath: /etc/mongodb/replicaset
               readOnly: true
             {{- end }}
+            {{- if .Values.tls.enabled }}
+            - name: tls
+              mountPath: /etc/mongodb/tls
+              readOnly: true
+            {{- end }}
           {{- with .Values.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
@@ -106,10 +169,15 @@ spec:
                   set -eo pipefail
                   HOST_FQDN="$(hostname -f)"
                   URI="mongodb://${HOST_FQDN}:27017/admin"
+                  TLS_ARGS=()
+                  {{- if .Values.tls.enabled }}
+                  TLS_ARGS+=(--tls)
+                  TLS_ARGS+=(--tlsCAFile /etc/mongodb/tls/ca.crt)
+                  {{- end }}
                   if [ -n "${MONGO_INITDB_ROOT_USERNAME:-}" ]; then
-                    mongosh "${URI}" -u "${MONGO_INITDB_ROOT_USERNAME}" -p "${MONGO_INITDB_ROOT_PASSWORD}" --quiet --eval 'rs.status()'
+                    mongosh "${URI}" "${TLS_ARGS[@]}" -u "${MONGO_INITDB_ROOT_USERNAME}" -p "${MONGO_INITDB_ROOT_PASSWORD}" --quiet --eval 'rs.status()'
                   else
-                    mongosh "${URI}" --quiet --eval 'rs.status()'
+                    mongosh "${URI}" "${TLS_ARGS[@]}" --quiet --eval 'rs.status()'
                   fi
             initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
@@ -126,10 +194,15 @@ spec:
                   set -eo pipefail
                   HOST_FQDN="$(hostname -f)"
                   URI="mongodb://${HOST_FQDN}:27017/admin"
+                  TLS_ARGS=()
+                  {{- if .Values.tls.enabled }}
+                  TLS_ARGS+=(--tls)
+                  TLS_ARGS+=(--tlsCAFile /etc/mongodb/tls/ca.crt)
+                  {{- end }}
                   if [ -n "${MONGO_INITDB_ROOT_USERNAME:-}" ]; then
-                    mongosh "${URI}" -u "${MONGO_INITDB_ROOT_USERNAME}" -p "${MONGO_INITDB_ROOT_PASSWORD}" --quiet --eval 'db.runCommand({ ping: 1 })'
+                    mongosh "${URI}" "${TLS_ARGS[@]}" -u "${MONGO_INITDB_ROOT_USERNAME}" -p "${MONGO_INITDB_ROOT_PASSWORD}" --quiet --eval 'db.runCommand({ ping: 1 })'
                   else
-                    mongosh "${URI}" --quiet --eval 'db.runCommand({ ping: 1 })'
+                    mongosh "${URI}" "${TLS_ARGS[@]}" --quiet --eval 'db.runCommand({ ping: 1 })'
                   fi
             initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
             periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
@@ -138,7 +211,7 @@ spec:
           {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-      {{- if or (not .Values.persistence.enabled) .Values.auth.enabled }}
+      {{- if or (not .Values.persistence.enabled) .Values.auth.enabled .Values.tls.enabled }}
       volumes:
         {{- if not .Values.persistence.enabled }}
         - name: data
@@ -154,6 +227,15 @@ spec:
               - key: replicaSetKey
                 path: keyfile
             defaultMode: 256
+        {{- end }}
+        {{- if .Values.tls.enabled }}
+        - name: tls
+          emptyDir: {}
+        - name: tls-src
+          secret:
+            secretName: {{ include "mongodb.tlsSecretName" . }}
+            defaultMode: 256
+            optional: true
         {{- end }}
       {{- end }}
   {{- if .Values.persistence.enabled }}

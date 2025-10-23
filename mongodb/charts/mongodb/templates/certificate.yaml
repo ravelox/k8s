@@ -1,0 +1,92 @@
+{{- if and .Values.tls.enabled (not .Values.tls.existingSecret) .Values.tls.certManager.enabled }}
+{{- $issuerName := required "tls.certManager.issuerRef.name must be set when TLS is enabled" .Values.tls.certManager.issuerRef.name -}}
+{{- $issuerKind := default "ClusterIssuer" .Values.tls.certManager.issuerRef.kind -}}
+{{- $issuerGroup := default "cert-manager.io" .Values.tls.certManager.issuerRef.group -}}
+{{- $secretName := include "mongodb.tlsSecretName" . -}}
+{{- $fullname := include "mongodb.fullname" . -}}
+{{- $namespace := .Release.Namespace -}}
+{{- $dnsSet := dict -}}
+{{- $ipSet := dict -}}
+
+{{- $svcNames := list $fullname (printf "%s-headless" $fullname) -}}
+{{- if .Values.exposure.perMemberNodePort.enabled }}
+  {{- range $i, $_ := until (int .Values.replicaCount) }}
+    {{- $svcNames = append $svcNames (printf "%s-%d-node" $fullname $i) }}
+  {{- end }}
+{{- end }}
+
+{{- range $i, $_ := until (int .Values.replicaCount) }}
+  {{- $podHost := printf "%s-%d.%s-headless" $fullname $i $fullname -}}
+  {{- $_ := set $dnsSet $podHost true -}}
+  {{- $_ := set $dnsSet (printf "%s.%s" $podHost $namespace) true -}}
+  {{- $_ := set $dnsSet (printf "%s.%s.svc" $podHost $namespace) true -}}
+  {{- $_ := set $dnsSet (printf "%s.%s.svc.cluster.local" $podHost $namespace) true -}}
+{{- end }}
+
+{{- range $svc := $svcNames }}
+  {{- $_ := set $dnsSet $svc true -}}
+  {{- $_ := set $dnsSet (printf "%s.%s" $svc $namespace) true -}}
+  {{- $_ := set $dnsSet (printf "%s.%s.svc" $svc $namespace) true -}}
+  {{- $_ := set $dnsSet (printf "%s.%s.svc.cluster.local" $svc $namespace) true -}}
+{{- end }}
+
+{{- range $name := .Values.tls.certManager.additionalDNSNames }}
+  {{- if ne (default "" $name) "" }}
+    {{- $_ := set $dnsSet $name true -}}
+  {{- end }}
+{{- end }}
+
+{{- $ipCandidates := list }}
+{{- if and (eq .Values.service.type "LoadBalancer") (ne (default "" .Values.service.loadBalancerIP) "") }}
+  {{- $ipCandidates = append $ipCandidates .Values.service.loadBalancerIP }}
+{{- end }}
+{{- if and .Values.exposure.perMemberNodePort.enabled (ne (default "" .Values.exposure.perMemberNodePort.externalIP) "") }}
+  {{- $ipCandidates = append $ipCandidates .Values.exposure.perMemberNodePort.externalIP }}
+{{- end }}
+{{- range $ip := .Values.tls.certManager.additionalIPAddresses }}
+  {{- if ne (default "" $ip) "" }}
+    {{- $ipCandidates = append $ipCandidates $ip }}
+  {{- end }}
+{{- end }}
+
+{{- range $ip := $ipCandidates }}
+  {{- $_ := set $dnsSet $ip true -}}
+  {{- $_ := set $ipSet $ip true -}}
+{{- end }}
+
+{{- $dnsNames := sortAlpha (keys $dnsSet) -}}
+{{- $ipAddresses := sortAlpha (keys $ipSet) -}}
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ printf "%s-cert" $fullname }}
+  labels:
+    {{- include "mongodb.labels" . | nindent 4 }}
+spec:
+  secretName: {{ $secretName }}
+  issuerRef:
+    name: {{ $issuerName }}
+    kind: {{ $issuerKind }}
+    group: {{ $issuerGroup }}
+  {{- with .Values.tls.certManager.duration }}
+  duration: {{ . }}
+  {{- end }}
+  {{- with .Values.tls.certManager.renewBefore }}
+  renewBefore: {{ . }}
+  {{- end }}
+  commonName: {{ $fullname | quote }}
+  dnsNames:
+    {{- range $dnsNames }}
+    - {{ . | quote }}
+    {{- end }}
+  {{- if gt (len $ipAddresses) 0 }}
+  ipAddresses:
+    {{- range $ipAddresses }}
+    - {{ . | quote }}
+    {{- end }}
+  {{- end }}
+  usages:
+    - server auth
+    - client auth
+{{- end }}

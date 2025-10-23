@@ -27,6 +27,23 @@ auth:
   replicaSetName: ""
   existingSecret: ""
 
+tls:
+  enabled: false
+  mode: requireTLS
+  existingSecret: ""
+  certManager:
+    enabled: true
+    issuerRef:
+      name: ""
+      kind: ClusterIssuer
+      group: cert-manager.io
+    secretName: ""
+    duration: 2160h
+    renewBefore: 360h
+    additionalDNSNames: []
+    additionalIPAddresses: []
+  allowConnectionsWithoutCertificates: true
+
 service:
   type: LoadBalancer
   port: 27017

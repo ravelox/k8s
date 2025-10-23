@@ -33,3 +33,13 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- define "mongodb.replicaSetName" -}}
 {{- default (printf "%s-rs" (include "mongodb.name" .)) .Values.auth.replicaSetName -}}
 {{- end -}}
+
+{{- define "mongodb.tlsSecretName" -}}
+{{- if .Values.tls.existingSecret -}}
+{{- .Values.tls.existingSecret -}}
+{{- else if and .Values.tls.enabled (ne (default "" .Values.tls.certManager.secretName) "") -}}
+{{- .Values.tls.certManager.secretName -}}
+{{- else -}}
+{{- printf "%s-tls" (include "mongodb.fullname" .) -}}
+{{- end -}}
+{{- end -}}

@@ -5,6 +5,8 @@
 {{- $useNodePorts := and $perNode.enabled (ne (default "" $perNode.externalIP) "") -}}
 {{- $externalIP := default "" $perNode.externalIP -}}
 {{- $baseNodePort := ternary (int $perNode.baseNodePort) 0 $useNodePorts -}}
+{{- $tlsEnabled := .Values.tls.enabled -}}
+{{- $tlsSecretName := include "mongodb.tlsSecretName" . -}}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -43,8 +45,35 @@ spec:
             - |-
               set -euo pipefail
               AUTH_ARGS=()
+              TLS_ARGS=()
               {{- if .Values.auth.enabled }}
               AUTH_ARGS=(-u "${MONGO_INITDB_ROOT_USERNAME}" -p "${MONGO_INITDB_ROOT_PASSWORD}")
+              {{- end }}
+              {{- if .Values.tls.enabled }}
+              wait_for_file() {
+                local path="$1"
+                local attempts=0
+                local max_attempts=${TLS_WAIT_ATTEMPTS:-60}
+                local sleep_seconds=${TLS_WAIT_SLEEP:-5}
+                until [ -f "${path}" ]; do
+                  attempts=$((attempts + 1))
+                  if [ "${attempts}" -ge "${max_attempts}" ]; then
+                    echo "timed out waiting for ${path}" >&2
+                    exit 1
+                  fi
+                  echo "Waiting for ${path} to appear..."
+                  sleep "${sleep_seconds}"
+                done
+              }
+              wait_for_file /etc/mongodb/tls/tls.crt
+              CA_FILE=/etc/mongodb/tls/ca.crt
+              if [ ! -f "${CA_FILE}" ]; then
+                echo "ca.crt not found in TLS secret; falling back to tls.crt"
+                CA_FILE=/etc/mongodb/tls/tls.crt
+              else
+                echo "Using ca.crt from TLS secret"
+              fi
+              TLS_ARGS=(--tls --tlsCAFile "${CA_FILE}")
               {{- end }}
 
               SCRIPT="/tmp/rs-init.js"
@@ -91,13 +120,19 @@ spec:
               fi
 
               for host in "${HOSTS[@]}"; do
-                until mongosh "mongodb://${host}/admin" "${AUTH_ARGS[@]}" --quiet --eval 'db.runCommand({ ping: 1 })' >/dev/null 2>&1; do
+                until mongosh "mongodb://${host}/admin" "${AUTH_ARGS[@]}" "${TLS_ARGS[@]}" --quiet --eval 'db.runCommand({ ping: 1 })' >/dev/null 2>&1; do
                   echo "Waiting for ${host} to accept connections..."
                   sleep 5
                 done
               done
 
-              mongosh "mongodb://{{ if $useNodePorts }}{{ $externalIP }}:{{ $baseNodePort }}{{ else }}{{ $fullname }}-0.{{ $fullname }}-headless:27017{{ end }}/admin" "${AUTH_ARGS[@]}" --quiet "${SCRIPT}"
+              mongosh "mongodb://{{ if $useNodePorts }}{{ $externalIP }}:{{ $baseNodePort }}{{ else }}{{ $fullname }}-0.{{ $fullname }}-headless:27017{{ end }}/admin" "${AUTH_ARGS[@]}" "${TLS_ARGS[@]}" --quiet "${SCRIPT}"
+          {{- if $tlsEnabled }}
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/mongodb/tls
+              readOnly: true
+          {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -109,4 +144,12 @@ spec:
       {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if $tlsEnabled }}
+      volumes:
+        - name: tls
+          secret:
+            secretName: {{ $tlsSecretName }}
+            defaultMode: 256
+            optional: true
       {{- end }}
