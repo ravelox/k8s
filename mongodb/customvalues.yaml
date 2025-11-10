@@ -5,6 +5,8 @@ auth:
 service:
   loadBalancerIP: 192.168.60.10
   nodePort: 32017
+  externalIPs:
+    - 192.168.60.10
 
 tls:
   enabled: true
@@ -18,3 +20,7 @@ exposure:
     enabled: true
     externalIP: 192.168.60.10
     baseNodePort: 32117
+    nodeIPs:
+      - 192.168.60.11
+      - 192.168.60.12
+      - 192.168.60.13
