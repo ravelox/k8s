@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: custom-root-ca-insert
+spec:
+  template:
+    spec:
+      volumes:
+      - name: custom-ca-shared
+        hostPath:
+          path: /vagrant/certs/shared
+          type: Directory
+      containers:
+      - name: custom-ca-root-insert
+        image: airbyte/worker:2.0.1
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -x
+          LIVE_KEYSTORE=/etc/pki/ca-trust/extracted/java/cacerts
+          TMP_KEYSTORE=/tmp/custom-ca-shared/cacerts
+          CUSTOM_CERT=/tmp/custom-ca-shared/k8s-cluster-ca.crt
+          if [ -f \${TMP_KEYSTORE} ]
+          then
+            echo "Keystore is already present"
+            echo "Checking for presence of certificate"
+            CERT_PRESENT=\$(keytool -list -storepass changeit -keystore "\${TMP_KEYSTORE}" | grep k8s-cluster-ca | wc -l)
+            if [ \${CERT_PRESENT} -gt 0 ]
+            then 
+              echo "Certificate is already present"
+              exit 0
+            else
+              echo "Certificate is not present"
+            fi
+          else
+            echo "Copying cert keystore"
+            cp -p \${LIVE_KEYSTORE} \${TMP_KEYSTORE}
+            echo "Done"
+          fi
+          echo "Inserting certificate into keystore"
+          chmod u+w "\${TMP_KEYSTORE}"
+          keytool -importcert -noprompt -storepass changeit -alias k8s-cluster-ca -file \${CUSTOM_CERT} -keystore "\${TMP_KEYSTORE}" -trustcacerts
+          chmod 444 \${TMP_KEYSTORE}
+          echo "Done"
+          echo "Backing up keystore for diagnostics"
+          rm -f \${TMP_KEYSTORE}.diag
+          cp -p \${TMP_KEYSTORE} \${TMP_KEYSTORE}.diag
+          echo "Done"
+          exit 0
+        volumeMounts:
+        - name: custom-ca-shared
+          mountPath: /tmp/custom-ca-shared
+      restartPolicy: Never
+  backoffLimit: 1

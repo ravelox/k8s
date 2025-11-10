@@ -52,6 +52,9 @@ service:
   loadBalancerIP: ""
   loadBalancerSourceRanges: []
   nodePort: null
+  externalIPs: []
+  clusterIP: ""
+  clusterIPs: []
 
 exposure:
   perMemberNodePort:
@@ -60,6 +63,7 @@ exposure:
     baseNodePort: 32017
     annotations: {}
     labels: {}
+    nodeIPs: []
 
 persistence:
   enabled: true

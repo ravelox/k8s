@@ -40,8 +40,27 @@
 {{- if and (eq .Values.service.type "LoadBalancer") (ne (default "" .Values.service.loadBalancerIP) "") }}
   {{- $ipCandidates = append $ipCandidates .Values.service.loadBalancerIP }}
 {{- end }}
+{{- range $ip := .Values.service.externalIPs }}
+  {{- if ne (default "" $ip) "" }}
+    {{- $ipCandidates = append $ipCandidates $ip }}
+  {{- end }}
+{{- end }}
+{{- $clusterIP := default "" .Values.service.clusterIP }}
+{{- if and (ne $clusterIP "") (ne $clusterIP "None") }}
+  {{- $ipCandidates = append $ipCandidates $clusterIP }}
+{{- end }}
+{{- range $ip := .Values.service.clusterIPs }}
+  {{- if and (ne (default "" $ip) "") (ne $ip "None") }}
+    {{- $ipCandidates = append $ipCandidates $ip }}
+  {{- end }}
+{{- end }}
 {{- if and .Values.exposure.perMemberNodePort.enabled (ne (default "" .Values.exposure.perMemberNodePort.externalIP) "") }}
   {{- $ipCandidates = append $ipCandidates .Values.exposure.perMemberNodePort.externalIP }}
+{{- end }}
+{{- range $ip := .Values.exposure.perMemberNodePort.nodeIPs }}
+  {{- if ne (default "" $ip) "" }}
+    {{- $ipCandidates = append $ipCandidates $ip }}
+  {{- end }}
 {{- end }}
 {{- range $ip := .Values.tls.certManager.additionalIPAddresses }}
   {{- if ne (default "" $ip) "" }}

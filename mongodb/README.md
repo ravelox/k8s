@@ -70,7 +70,9 @@ Key values:
 - `service.type`: defaults to `LoadBalancer` for external client access. Switch to `ClusterIP` for internal-only usage.
 - `service.loadBalancerIP` / `service.loadBalancerSourceRanges`: optional controls for the external load balancer.
 - `service.nodePort`: set when you need a fixed NodePort (integer in 30000-32767) for the LoadBalancer service.
+- `service.externalIPs`, `service.clusterIP`, `service.clusterIPs`: explicitly pin additional dataplane addresses (also copied into the TLS certificate SANs).
 - `exposure.perMemberNodePort.*`: enable to publish each replica on the same external IP with incrementing NodePorts (e.g., 32017, 32018, 32019) and provide a client-facing host list.
+- `exposure.perMemberNodePort.nodeIPs`: optional list of node IPs clients might dial directly via the NodePort services; each entry is added to the TLS certificate SANs.
 - `persistence.*`: control PVC provisioning; set `persistence.enabled=false` to use ephemeral storage (not recommended for production).
 - `resources`: tune container requests and limits.
 - `initContainers.keyfile.*`: image settings for the keyfile staging init container (override if BusyBox is not allowed in your cluster).
@@ -79,7 +81,7 @@ Key values:
 Setting `tls.enabled=true` switches the StatefulSet and replica-set bootstrap Job to `requireTLS`. When `tls.existingSecret` is empty the chart provisions a cert-manager `Certificate` resource:
 - The issuer reference comes from `tls.certManager.issuerRef` (set `name`, optionally `kind`/`group`).
 - The generated `Secret` defaults to `<release>-mongodb-tls` but can be overridden with `tls.certManager.secretName`.
-- All MongoDB service names (ClusterIP, headless, and optional per-member NodePort services) and every configured IP address (`service.loadBalancerIP`, `exposure.perMemberNodePort.externalIP`, plus any extras in `tls.certManager.additional*`) are added as DNS Subject Alternative Names. IPs are also included in the certificate `ipAddresses` list.
+- All MongoDB service names (ClusterIP, headless, and optional per-member NodePort services) and every configured IP address (`service.loadBalancerIP`, `service.externalIPs`, `service.clusterIP`, `service.clusterIPs`, `exposure.perMemberNodePort.externalIP`, `exposure.perMemberNodePort.nodeIPs`, plus any extras in `tls.certManager.additional*`) are added as DNS Subject Alternative Names. IPs are also included in the certificate `ipAddresses` list.
 - The chart annotates each MongoDB service with `cert-manager.io/cluster-issuer` using `tls.certManager.issuerRef.name` when it is set.
 - The secret must expose `tls.crt`, `tls.key`, and `ca.crt`. An init container combines the key and certificate into `/etc/mongodb/tls/tls.pem` before `mongod` starts.
 - If `ca.crt` is missing (common with some ACME issuers), the pods reuse `tls.crt` as the CA bundle so MongoDB still launches. Provide a dedicated CA certificate when mutual TLS or strict chain validation is required.
