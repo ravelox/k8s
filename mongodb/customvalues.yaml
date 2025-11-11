@@ -1,3 +1,6 @@
+replicaSet:
+  memberCount: 2
+
 auth:
   password: "strong-password"
   replicaSetKey: "N704YOI7uqwoh2GL6rf7TGoGcmfNXaStBur/jG4/qQ3mufFl+Qs+lH/R6745WQhFUlEFeBteYrrwiJb6dhhRmwhVMlFs1+/p/dWi+mjJHFNpqyLBOljUH9RGE+hFcf3Bk18avRWG7hEttxiLds/TfkE/Grlt4GIahenlJ23ZjCJD0LLdFjyaWvlg3RZnXrYYMiYaMrbDa2GLHFevRDyGjZ49WHpdmOsHycdO1c2/jMUwxeSyxyQrQYZ8KIz7JajKZKuVgvk6ZLNDaqnevaT5vgMRz0FoCPEz6qgW3N8HzNccTonHXe/z4mZxoGCbAkoZUsAGmOB7CFkw6mWbF7R/FbzAlcHC6s/pf3l3PyGXpewofEEf8SyaQsFUkgBi5+aPXdd49ZH9exAYwHgVUS+HAiBRRFmsJYD3QlEDoBZOxF1yt9hUw/4PQ43at1OeUsZ6+I4EC9hrs7iSDD6/Q7t2PfvQFtOE0YWKQMmH2lKqcVQcI1rFL9/40n/m5+ulhHq4MhBBq+bG26gJMGvx3u+x7GkP8GITrKuoZY7tVxEz1ocrP/mc7p39qQ1d+WSS+j8ndTOz07kWVuBt2JeF7Is5/nBOyb7NAf6mz6SUzA99/sT5rvKPYRAwPYs1jkBtl4+CUtDimFTS3HJEV18jfIrMtLn0gRMSoJ1TiR8B289ytozivlYNtPDYwDBDstn+gzCTeuwfw1AZgbLHX90h5NJ9ckVwBPv58n991KvMyXVxzXbgmpg8OGL0GLhv1dDfA1Qolo3K7ButC4UsGeI25mgMGre/c7XmzCG41emv5oHRV8CwwuVIrf14buPgjXJglOsezpwoZeGS4KiK4rfJUn196kpIfL+z78BMqHm7UldhJLyBF0D0qCLxoEprn6gez4m+xprHeyqkZKsWUAisWRLQfIV/O4TGtZw9VBKLyC/srFaSgCn4CwhE8qLjSny2W1NaqEybbWGzfmATqehrIZ/GHFY3X48bmckKD4BA5pX4vkUXowRI"
@@ -20,7 +23,3 @@ exposure:
     enabled: true
     externalIP: 192.168.60.10
     baseNodePort: 32117
-    nodeIPs:
-      - 192.168.60.11
-      - 192.168.60.12
-      - 192.168.60.13

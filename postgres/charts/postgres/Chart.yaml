@@ -1,0 +1,6 @@
+apiVersion: v2
+name: postgres-cdc
+description: Single-instance PostgreSQL deployment with logical decoding enabled
+version: 0.1.0
+appVersion: "16"
+type: application

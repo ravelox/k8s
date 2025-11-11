@@ -1,0 +1,73 @@
+nameOverride: ""
+fullnameOverride: ""
+
+replicaCount: 1
+
+image:
+  repository: postgres
+  tag: "16"
+  pullPolicy: IfNotPresent
+
+auth:
+  username: app_user
+  password: changeMeSuperSecret
+  database: appdb
+  existingSecret: ""
+
+service:
+  type: ClusterIP
+  port: 5432
+
+persistence:
+  enabled: true
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
+  storageClass: ""
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+
+config:
+  postgresqlConf: |
+    listen_addresses = '*'
+    wal_level = logical
+    max_wal_senders = 10
+    max_replication_slots = 10
+    max_logical_replication_workers = 8
+    shared_buffers = 256MB
+    track_commit_timestamp = on
+    logical_decoding_work_mem = 128MB
+    hot_standby = on
+  pgHbaConf: |
+    # Allow local socket access
+    local   all             all                                     trust
+    # Allow connections from any IPv4/IPv6 address. Tighten CIDRs in production.
+    host    all             all             0.0.0.0/0               scram-sha-256
+    host    all             all             ::0/0                   scram-sha-256
+    # Allow logical replication clients (CDC connectors)
+    host    replication     all             0.0.0.0/0               scram-sha-256
+    host    replication     all             ::0/0                   scram-sha-256
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 30
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+podAnnotations: {}
