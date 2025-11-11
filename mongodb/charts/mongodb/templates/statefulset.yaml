@@ -8,7 +8,7 @@ metadata:
 {{- $runAsGroup := default (default 999 .Values.podSecurityContext.fsGroup) .Values.securityContext.runAsGroup }}
 spec:
   serviceName: {{ include "mongodb.fullname" . }}-headless
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ include "mongodb.replicaCount" . }}
   podManagementPolicy: Parallel
   selector:
     matchLabels:

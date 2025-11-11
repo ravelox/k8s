@@ -7,15 +7,16 @@
 {{- $namespace := .Release.Namespace -}}
 {{- $dnsSet := dict -}}
 {{- $ipSet := dict -}}
+{{- $replicaCount := include "mongodb.replicaCount" . | int -}}
 
 {{- $svcNames := list $fullname (printf "%s-headless" $fullname) -}}
 {{- if .Values.exposure.perMemberNodePort.enabled }}
-  {{- range $i, $_ := until (int .Values.replicaCount) }}
+  {{- range $i, $_ := until $replicaCount }}
     {{- $svcNames = append $svcNames (printf "%s-%d-node" $fullname $i) }}
   {{- end }}
 {{- end }}
 
-{{- range $i, $_ := until (int .Values.replicaCount) }}
+{{- range $i, $_ := until $replicaCount }}
   {{- $podHost := printf "%s-%d.%s-headless" $fullname $i $fullname -}}
   {{- $_ := set $dnsSet $podHost true -}}
   {{- $_ := set $dnsSet (printf "%s.%s" $podHost $namespace) true -}}

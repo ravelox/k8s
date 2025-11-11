@@ -1,5 +1,5 @@
 {{- $fullname := include "mongodb.fullname" . -}}
-{{- $replicaCount := int .Values.replicaCount -}}
+{{- $replicaCount := include "mongodb.replicaCount" . | int -}}
 {{- $replicaSet := include "mongodb.replicaSetName" . -}}
 {{- $perNode := .Values.exposure.perMemberNodePort -}}
 {{- $useNodePorts := and $perNode.enabled (ne (default "" $perNode.externalIP) "") -}}
@@ -88,22 +88,63 @@ spec:
                 _id: "{{ $replicaSet }}",
                 members: hosts.map((host, index) => ({ _id: index, host }))
               };
+              const tolerateErrors = ['NotYetInitialized', 'InvalidReplicaSetConfig'];
+              const tolerateCodes = [94, 74];
+              const tolerateInitiateErrors = ['AlreadyInitialized', 'InvalidReplicaSetConfig'];
+              const tolerateInitiateCodes = [23, 93, 94];
+              const sortHosts = (list) => list.slice().sort();
+              const desiredHostsSorted = sortHosts(hosts);
+
+              function reconcileReplicaSet() {
+                const currentConfig = rs.config();
+                const currentHostsSorted = sortHosts(currentConfig.members.map((m) => m.host));
+                const matches = currentHostsSorted.length === desiredHostsSorted.length &&
+                  currentHostsSorted.every((host, idx) => host === desiredHostsSorted[idx]);
+                if (matches) {
+                  print('Replica set already matches desired configuration');
+                  return true;
+                }
+                const nextConfig = Object.assign({}, currentConfig);
+                nextConfig.version = (currentConfig.version || 1) + 1;
+                nextConfig.members = config.members;
+                const reconfig = rs.reconfig(nextConfig, { force: true });
+                if (!reconfig.ok || reconfig.ok !== 1) {
+                  throw new Error('Replica set reconfig failed: ' + tojson(reconfig));
+                }
+                print('Replica set reconfigured to desired hosts');
+                return false;
+              }
+
               try {
                 const status = rs.status();
                 if (status.ok === 1) {
-                  print('Replica set already initialized');
+                  const matches = reconcileReplicaSet();
+                  if (matches) {
+                    print('Replica set already initialized');
+                  }
                   quit(0);
                 }
               } catch (err) {
-                if (err.codeName && err.codeName !== 'NotYetInitialized') {
+                if (!tolerateErrors.includes(err.codeName) && !tolerateCodes.includes(err.code)) {
                   throw err;
                 }
+                print(`Replica set not initialized yet (${err.codeName || err.code}); continuing with rs.initiate`);
               }
-              const result = rs.initiate(config);
-              if (!result.ok || result.ok !== 1) {
-                throw new Error('Replica set initiation failed: ' + tojson(result));
+              try {
+                const result = rs.initiate(config);
+                if (!result.ok || result.ok !== 1) {
+                  throw new Error('Replica set initiation failed: ' + tojson(result));
+                }
+                print('Replica set initiated');
+              } catch (err) {
+                if (!tolerateInitiateErrors.includes(err.codeName) && !tolerateInitiateCodes.includes(err.code)) {
+                  throw err;
+                }
+                print(`Replica set already initialized (${err.codeName || err.code}); attempting reconfiguration`);
+                reconcileReplicaSet();
+                quit(0);
               }
-              print('Replica set initiated');
+              quit(0);
               RS
 
               HOSTS=()

@@ -14,6 +14,9 @@ initContainers:
 
 replicaCount: 3
 
+replicaSet:
+  memberCount: null  # override replicaCount when set
+
 serviceAccount:
   create: true
   name: ""

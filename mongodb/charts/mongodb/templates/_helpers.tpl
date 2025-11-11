@@ -34,6 +34,13 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- default (printf "%s-rs" (include "mongodb.name" .)) .Values.auth.replicaSetName -}}
 {{- end -}}
 
+{{- define "mongodb.replicaCount" -}}
+{{- $replicaSet := .Values.replicaSet | default dict -}}
+{{- $raw := coalesce $replicaSet.memberCount .Values.replicaCount 3 -}}
+{{- $count := max 1 (int $raw) -}}
+{{- printf "%d" $count -}}
+{{- end -}}
+
 {{- define "mongodb.tlsSecretName" -}}
 {{- if .Values.tls.existingSecret -}}
 {{- .Values.tls.existingSecret -}}

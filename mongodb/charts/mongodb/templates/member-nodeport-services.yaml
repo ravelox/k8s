@@ -7,12 +7,13 @@
     {{- $_ := set $annotations $k $v -}}
   {{- end }}
 {{- end }}
+{{- $replicaCount := include "mongodb.replicaCount" . | int -}}
 {{- $issuerName := default "" .Values.tls.certManager.issuerRef.name -}}
 {{- if $issuerName }}
   {{- $_ := set $annotations "cert-manager.io/cluster-issuer" $issuerName -}}
 {{- end }}
 {{- $basePort := int .Values.exposure.perMemberNodePort.baseNodePort -}}
-{{- range $index, $_ := until (int $.Values.replicaCount) }}
+{{- range $index, $_ := until $replicaCount }}
 apiVersion: v1
 kind: Service
 metadata:

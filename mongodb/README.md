@@ -1,6 +1,6 @@
 # MongoDB Helm Chart
 
-This chart deploys a three-member MongoDB replica set on Kubernetes using a `StatefulSet`, persistent volumes, and an init `Job` that bootstraps the replica set.
+This chart deploys a MongoDB replica set (three members by default, configurable) on Kubernetes using a `StatefulSet`, persistent volumes, and an init `Job` that bootstraps the replica topology.
 
 ## Prerequisites
 - Helm 3.8+ installed locally.
@@ -17,7 +17,7 @@ helm install my-release charts/mongodb
 ```
 
 Helm creates:
-- StatefulSet with three MongoDB pods (`replicaCount` configurable).
+- StatefulSet with a configurable number of MongoDB pods (defaults to three members).
 - Headless and ClusterIP services for intra-cluster and client access.
 - Secret with root credentials and replica-set key (unless you provide `auth.existingSecret`).
 - Job that runs `rs.initiate` once all pods are reachable.
@@ -35,6 +35,14 @@ helm install my-release charts/mongodb \
   --set auth.password='strong-password' \
   --set auth.replicaSetKey="$(cat replset.key)" \
   --set persistence.size=20Gi
+
+# Scale to five replica-set members at install time
+helm install my-release charts/mongodb \
+  --namespace mongodb \
+  --create-namespace \
+  --set replicaSet.memberCount=5 \
+  --set auth.password='strong-password' \
+  --set auth.replicaSetKey="$(cat replset.key)"
 
 # Enable per-member NodePorts advertised via 192.168.60.10:32017-32019
 helm install my-release charts/mongodb \
@@ -66,7 +74,7 @@ Key values:
 - `tls.existingSecret`: reference an existing TLS secret containing `tls.crt`, `tls.key`, and `ca.crt` instead of provisioning one via cert-manager.
 - `tls.certManager.*`: configure issuer reference, secret naming, rotation windows, and optional SAN overrides for auto-generated certificates.
 - `tls.allowConnectionsWithoutCertificates`: allow username/password clients (including replica-set peers) to connect without presenting a client TLS certificate; defaults to `true`.
-- `replicaCount`: number of stateful replica members (default `3`).
+- `replicaSet.memberCount`: number of replica-set members (pods/PVCs). Overrides `replicaCount` when set (the old `replicaCount` value is still honored for backward compatibility). Default `3`.
 - `service.type`: defaults to `LoadBalancer` for external client access. Switch to `ClusterIP` for internal-only usage.
 - `service.loadBalancerIP` / `service.loadBalancerSourceRanges`: optional controls for the external load balancer.
 - `service.nodePort`: set when you need a fixed NodePort (integer in 30000-32767) for the LoadBalancer service.
