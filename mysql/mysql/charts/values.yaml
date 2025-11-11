@@ -1,0 +1,97 @@
+replicaCount: 1
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  repository: mysql
+  tag: "8.0.37"
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+auth:
+  rootPassword: ""
+  existingSecret: ""
+  username: ""
+  password: ""
+  database: ""
+
+service:
+  type: ClusterIP
+  port: 3306
+  annotations: {}
+  headless:
+    enabled: true
+    annotations: {}
+
+persistence:
+  enabled: true
+  accessModes:
+    - ReadWriteOnce
+  size: 20Gi
+  storageClass: ""
+
+resources: {}
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+podAnnotations: {}
+
+podLabels: {}
+
+serviceAccount:
+  create: false
+  name: ""
+
+configuration:
+  serverId: 1
+  logBin: mysql-bin
+  binlogFormat: ROW
+  binlogRowImage: FULL
+  binlogChecksum: CRC32
+  syncBinlog: 1
+  gtidMode: "OFF"
+  enforceGtidConsistency: "OFF"
+  binlogRetentionHours: 168
+  expireLogsDays: 7
+  replicationDoDb: []
+  extraMyCnf: |
+    # Add custom overrides here.
+
+startupProbe:
+  enabled: true
+  initialDelaySeconds: 20
+  periodSeconds: 10
+  failureThreshold: 30
+
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+  successThreshold: 1
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 3
+  failureThreshold: 3
+  successThreshold: 1
+
+metrics:
+  enabled: false
+
+extraEnv: []
+
+extraEnvFrom: []
+
+extraVolumeMounts: []
+
+extraVolumes: []

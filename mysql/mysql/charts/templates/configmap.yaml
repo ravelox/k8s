@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mysql-cdc.fullname" . }}-config
+  labels:
+    {{- include "mysql-cdc.labels" . | nindent 4 }}
+data:
+  custom.cnf: |
+    [mysqld]
+    server_id = {{ .Values.configuration.serverId }}
+    log-bin = {{ .Values.configuration.logBin }}
+    binlog_format = {{ .Values.configuration.binlogFormat }}
+    binlog_row_image = {{ .Values.configuration.binlogRowImage }}
+    binlog_checksum = {{ .Values.configuration.binlogChecksum }}
+    sync_binlog = {{ .Values.configuration.syncBinlog }}
+    gtid_mode = {{ .Values.configuration.gtidMode }}
+    enforce_gtid_consistency = {{ .Values.configuration.enforceGtidConsistency }}
+    binlog_expire_logs_seconds = {{ mul .Values.configuration.binlogRetentionHours 3600 }}
+    expire_logs_days = {{ .Values.configuration.expireLogsDays }}
+    {{- range .Values.configuration.replicationDoDb }}
+    replicate_do_db = {{ . }}
+    {{- end }}
+    {{- if .Values.configuration.extraMyCnf }}
+    {{- .Values.configuration.extraMyCnf | nindent 4 }}
+    {{- end }}

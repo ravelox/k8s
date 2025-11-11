@@ -1,0 +1,13 @@
+apiVersion: v2
+name: mysql-cdc
+description: Helm chart for deploying a MySQL instance with Change Data Capture (CDC) enabled.
+type: application
+version: 0.1.0
+appVersion: "8.0.37"
+keywords:
+  - mysql
+  - database
+  - cdc
+  - binlog
+maintainers:
+  - name: Codex
